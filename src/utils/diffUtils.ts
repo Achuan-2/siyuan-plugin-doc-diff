@@ -312,9 +312,7 @@ export function generateUnifiedDiffHtml(doc1: any, doc2: any, options: DiffViewO
                             <button class="diff-line-action-btn diff-revert-line-btn"
                                     onclick="window.revertLine && window.revertLine(${i}, 'added')"
                                     title="撤回到原文档内容">
-                                <svg width="12" height="12" viewBox="0 0 1024 1024" fill="currentColor">
-                                    <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm193.5 301.7l-210.6 292a31.8 31.8 0 0 1-51.7 0L322.5 365.7c-13.7-19.1-2.2-46.7 23.6-46.7h46.4c10.2 0 19.9 4.9 25.9 13.3l71.2 98.8 157.2-218c6-8.3 15.6-13.3 25.9-13.3H719c25.8 0 37.3 27.6 23.5 46.7z"/>
-                                </svg>
+                                    <svg  viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" fill=“currentColor” width="64" height="64"><path d="M64 347.552L320 128v448z"  p-id="6963"></path><path d="M265.472 896v-112h377.824a200 200 0 1 0 0-400H240V272h403.296c172.32 0 312 139.68 312 312S815.616 896 643.296 896H265.472z"  p-id="6964"></path></svg>
                             </button>
                         </div>
                     `;
@@ -365,6 +363,28 @@ export function generateSideBySideDiffHtml(doc1: any, doc2: any, options: DiffVi
         </div>
     `;
     
+    // 创建行映射，用于在并排模式中显示差异
+    const leftLineMap = new Map<number, { type: 'added' | 'removed' | 'context', content: string, isIdLine?: boolean }>();
+    const rightLineMap = new Map<number, { type: 'added' | 'removed' | 'context', content: string, isIdLine?: boolean }>();
+    
+    // 处理差异结果，建立行映射
+    for (const line of diffResult.lines) {
+        if (line.oldLineNumber !== undefined) {
+            leftLineMap.set(line.oldLineNumber, {
+                type: line.type,
+                content: line.content,
+                isIdLine: line.isIdLine
+            });
+        }
+        if (line.newLineNumber !== undefined) {
+            rightLineMap.set(line.newLineNumber, {
+                type: line.type,
+                content: line.content,
+                isIdLine: line.isIdLine
+            });
+        }
+    }
+    
     // 创建并排布局
     diffHtml += `
         <div class="side-by-side-container">
@@ -381,8 +401,19 @@ export function generateSideBySideDiffHtml(doc1: any, doc2: any, options: DiffVi
     for (let i = 0; i < leftLines.length; i++) {
         const lineNumber = i + 1;
         const content = processLineContent(leftLines[i]);
+        const diffInfo = leftLineMap.get(lineNumber);
+        
+        let lineClass = 'side-line';
+        if (diffInfo) {
+            if (diffInfo.type === 'removed') {
+                lineClass += diffInfo.isIdLine ? ' side-line-removed side-line-id' : ' side-line-removed';
+            } else if (diffInfo.type === 'context') {
+                lineClass += ' side-line-context';
+            }
+        }
+        
         diffHtml += `
-            <div class="side-line" data-line-number="${lineNumber}">
+            <div class="${lineClass}" data-line-number="${lineNumber}">
                 ${showLineNumbers ? `<div class="side-line-number">${lineNumber}</div>` : ''}
                 <div class="side-line-content">${content}</div>
             </div>
@@ -407,8 +438,19 @@ export function generateSideBySideDiffHtml(doc1: any, doc2: any, options: DiffVi
         const lineNumber = i + 1;
         const content = processLineContent(rightLines[i]);
         const isEditable = enableEditing ? 'contenteditable="true"' : '';
+        const diffInfo = rightLineMap.get(lineNumber);
+        
+        let lineClass = 'side-line';
+        if (diffInfo) {
+            if (diffInfo.type === 'added') {
+                lineClass += diffInfo.isIdLine ? ' side-line-added side-line-id' : ' side-line-added';
+            } else if (diffInfo.type === 'context') {
+                lineClass += ' side-line-context';
+            }
+        }
+        
         diffHtml += `
-            <div class="side-line" data-line-number="${lineNumber}">
+            <div class="${lineClass}" data-line-number="${lineNumber}">
                 ${showLineNumbers ? `<div class="side-line-number">${lineNumber}</div>` : ''}
                 <div class="side-line-content" ${isEditable}>${content}</div>
             </div>
@@ -1675,6 +1717,60 @@ export function generateModeSwitchableDiffHtml(
             
             .side-line:hover {
                 background-color: rgba(0, 0, 0, 0.04);
+            }
+            
+            /* 并排模式的差异行样式 */
+            .side-line-added {
+                background: #e6ffed;
+                color: #24292e;
+            }
+            
+            .side-line-added .side-line-number {
+                background: #cdffd8;
+            }
+            
+            .side-line-removed {
+                background: #ffeef0;
+                color: #24292e;
+            }
+            
+            .side-line-removed .side-line-number {
+                background: #fdb8c0;
+            }
+            
+            .side-line-context {
+                background: #fff;
+                color: #24292e;
+            }
+            
+            /* 并排模式ID行使用淡色样式 */
+            .side-line-id.side-line-added {
+                background: #f0fff4;
+                color: #6a737d;
+            }
+            
+            .side-line-id.side-line-added .side-line-number {
+                background: #e6ffed;
+            }
+            
+            .side-line-id.side-line-removed {
+                background: #fef8f8;
+                color: #6a737d;
+            }
+            
+            .side-line-id.side-line-removed .side-line-number {
+                background: #ffeef0;
+            }
+            
+            /* 并排模式中的空白字符样式 */
+            .side-line-added .leading-whitespace,
+            .side-line-added .trailing-whitespace {
+                background-color: rgba(40, 167, 69, 0.2);
+            }
+            
+            .side-line-removed .leading-whitespace,
+            .side-line-removed .trailing-whitespace {
+                background-color: rgba(215, 58, 73, 0.2);
             }
             
             .side-line-number {
