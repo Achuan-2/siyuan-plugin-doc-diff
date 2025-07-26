@@ -33,6 +33,7 @@ export const SETTINGS_FILE = "settings.json";
 
 export default class PluginSample extends Plugin {
     private selectedDocuments: string[] = [];
+    private currentDocumentFormat: 'markdown' | 'kramdown' = 'markdown';
 
     async onload() {
         // 插件被启用时会自动调用这个函数
@@ -155,6 +156,9 @@ export default class PluginSample extends Plugin {
             return;
         }
 
+        // 保存当前使用的文档格式
+        this.currentDocumentFormat = format;
+
         let loadingDialog: Dialog | null = null;
         
         try {
@@ -188,8 +192,8 @@ export default class PluginSample extends Plugin {
                 return;
             }
 
-            // 创建差异比较对话框
-            this.showDiffDialog(doc1Info, doc2Info);
+            // 创建差异比较对话框，传递格式参数
+            this.showDiffDialog(doc1Info, doc2Info, format);
 
         } catch (error) {
             if (loadingDialog) {
@@ -234,7 +238,7 @@ export default class PluginSample extends Plugin {
     /**
      * 显示差异比较对话框
      */
-    private showDiffDialog(doc1: any, doc2: any) {
+    private showDiffDialog(doc1: any, doc2: any, format: 'markdown' | 'kramdown' = 'markdown') {
         let isSwapped = false;
         let currentDoc1 = doc1;
         let currentDoc2 = doc2;
@@ -359,14 +363,14 @@ export default class PluginSample extends Plugin {
                     t("docDiff.confirmSave"),
                     async () => {
                         try {
-                            // 更新文档内容
+                            // 更新文档内容 - updateBlock API 只支持 markdown 和 dom，所以统一使用 markdown
                             const targetDocId = currentDoc2.id;
                             await updateBlock("markdown", newContent, targetDocId);
                             
                             showMessage(t("docDiff.saveSuccess"));
                             
-                            // 更新当前文档内容以反映更改
-                            const updatedDocInfo = await this.getDocumentInfo(targetDocId, 'markdown');
+                            // 更新当前文档内容以反映更改 - 使用相同格式重新加载
+                            const updatedDocInfo = await this.getDocumentInfo(targetDocId, format);
                             currentDoc2 = updatedDocInfo;
                             updateDiffContent();
                         } catch (error) {
@@ -402,8 +406,9 @@ export default class PluginSample extends Plugin {
                     const oldLineIndex = diffLine.oldLineNumber - 1;
                     
                     if (oldLineIndex >= 0 && oldLineIndex < oldLines.length) {
-                        // 获取新文档当前内容
-                        const newDocCurrentContent = (await exportMdContent(newDocId)).content;
+                        // 获取新文档当前内容 - 使用当前格式
+                        const newDocCurrentInfo = await this.getDocumentInfo(newDocId, format);
+                        const newDocCurrentContent = newDocCurrentInfo.content;
                         const newLines = newDocCurrentContent.split('\n');
                         const newLineIndex = diffLine.newLineNumber - 1;
                         
@@ -415,7 +420,7 @@ export default class PluginSample extends Plugin {
                             showMessage("已撤回到原文档内容");
                             
                             // 刷新差异视图 - 更新新文档（右侧文档）
-                            const updatedDocInfo = await this.getDocumentInfo(newDocId, 'markdown');
+                            const updatedDocInfo = await this.getDocumentInfo(newDocId, format);
                             currentDoc2 = updatedDocInfo;
                             updateDiffContent();
                         }
@@ -423,7 +428,8 @@ export default class PluginSample extends Plugin {
                 } else if (lineType === 'added' && diffLine.newLineNumber && !diffLine.oldLineNumber) {
                     // 撤回纯新增行：将该行替换为旧文档中对应位置的行内容
                     const oldLines = oldDocContent.split('\n');
-                    const newDocCurrentContent = (await exportMdContent(newDocId)).content;
+                    const newDocCurrentInfo = await this.getDocumentInfo(newDocId, format);
+                    const newDocCurrentContent = newDocCurrentInfo.content;
                     const newLines = newDocCurrentContent.split('\n');
                     const newLineIndex = diffLine.newLineNumber - 1;
                     
@@ -472,7 +478,7 @@ export default class PluginSample extends Plugin {
                         showMessage("已撤回到原文档对应位置的内容");
                         
                         // 刷新差异视图 - 更新新文档（右侧文档）
-                        const updatedDocInfo = await this.getDocumentInfo(newDocId, 'markdown');
+                        const updatedDocInfo = await this.getDocumentInfo(newDocId, format);
                         currentDoc2 = updatedDocInfo;
                         updateDiffContent();
                     }
