@@ -25,7 +25,7 @@ import SettingPanel from "./setting-example.svelte";
 import { getDefaultSettings } from "./defaultSettings";
 import { setPluginInstance, t } from "./utils/i18n";
 import LoadingDialog from "./components/LoadingDialog.svelte";
-import { generateFullDiffHtml, generateSwappableDiffHtml, computeTextDiff } from "./utils/diffUtils";
+import { generateFullDiffHtml, generateSwappableDiffHtml, generateModeSwitchableDiffHtml, computeTextDiff, DiffViewMode } from "./utils/diffUtils";
 
 export const SETTINGS_FILE = "settings.json";
 
@@ -238,6 +238,7 @@ export default class PluginSample extends Plugin {
         let isSwapped = false;
         let currentDoc1 = doc1;
         let currentDoc2 = doc2;
+        let currentMode = DiffViewMode.UNIFIED; // 默认使用合并模式
         let dialog: Dialog;
         
         // 保存原始内容用于撤回
@@ -251,12 +252,16 @@ export default class PluginSample extends Plugin {
             // 计算并保存当前的差异结果
             currentDiffResult = computeTextDiff(currentDoc1.content, currentDoc2.content);
             
-            const diffHtml = generateSwappableDiffHtml(
+            const diffHtml = generateModeSwitchableDiffHtml(
                 currentDoc1,
                 currentDoc2,
-                'swapDocuments()',
-                t("docDiff.swapDocumentsTooltip"),
-                'revertChanges()'
+                currentMode,
+                {
+                    swapCallback: 'swapDocuments()',
+                    revertCallback: 'revertChanges()',
+                    saveCallback: 'saveChanges()',
+                    modeChangeCallback: 'switchDiffMode'
+                }
             );
             const container = dialog.element.querySelector('.doc-diff-container');
             if (container) {
@@ -309,6 +314,74 @@ export default class PluginSample extends Plugin {
             }
         };
         
+        const switchDiffMode = (newMode: string) => {
+            currentMode = newMode as DiffViewMode;
+            updateDiffContent();
+        };
+        
+        const saveChanges = async () => {
+            try {
+                if (currentMode !== DiffViewMode.SIDE_BY_SIDE) {
+                    pushErrMsg(t("docDiff.saveOnlyInSideBySide"));
+                    return;
+                }
+                
+                // 获取右侧编辑区域的内容
+                const rightPaneContent = dialog.element.querySelector('#right-pane-content');
+                if (!rightPaneContent) {
+                    pushErrMsg(t("docDiff.cannotFindEditArea"));
+                    return;
+                }
+                
+                // 提取文本内容
+                let newContent = '';
+                const sideLines = rightPaneContent.querySelectorAll('.side-line');
+                const lines: string[] = [];
+                
+                sideLines.forEach((sideLine) => {
+                    const contentElement = sideLine.querySelector('.side-line-content');
+                    if (contentElement) {
+                        // 获取纯文本内容，移除HTML标签
+                        let lineText = contentElement.textContent || '';
+                        // 处理空行
+                        if (lineText === '\u00A0' || lineText.trim() === '') {
+                            lineText = '';
+                        }
+                        lines.push(lineText);
+                    }
+                });
+                
+                newContent = lines.join('\n');
+                
+                // 使用 confirm 函数显示确认对话框
+                confirm(
+                    t("docDiff.saveChanges"),
+                    t("docDiff.confirmSave"),
+                    async () => {
+                        try {
+                            // 更新文档内容
+                            const targetDocId = currentDoc2.id;
+                            await updateBlock("markdown", newContent, targetDocId);
+                            
+                            showMessage(t("docDiff.saveSuccess"));
+                            
+                            // 更新当前文档内容以反映更改
+                            const updatedDocInfo = await this.getDocumentInfo(targetDocId, 'markdown');
+                            currentDoc2 = updatedDocInfo;
+                            updateDiffContent();
+                        } catch (error) {
+                            console.error("保存文档失败:", error);
+                            const errorMessage = error instanceof Error ? error.message : String(error);
+                            pushErrMsg(`${t("docDiff.saveError")}: ${errorMessage}`);
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error("保存操作失败:", error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                pushErrMsg(`${t("docDiff.saveOperationFailed")}: ${errorMessage}`);
+            }
+        };
         
         const revertLine = async (lineIndex: number, lineType: string) => {
             try {
@@ -417,16 +490,22 @@ export default class PluginSample extends Plugin {
         (window as any).swapDocuments = swapDocuments;
         (window as any).revertChanges = revertChanges;
         (window as any).revertLine = revertLine;
+        (window as any).switchDiffMode = switchDiffMode;
+        (window as any).saveChanges = saveChanges;
         
         // 初始化差异结果
         currentDiffResult = computeTextDiff(currentDoc1.content, currentDoc2.content);
         
-        const initialDiffHtml = generateSwappableDiffHtml(
+        const initialDiffHtml = generateModeSwitchableDiffHtml(
             currentDoc1,
             currentDoc2,
-            'swapDocuments()',
-            t("docDiff.swapDocumentsTooltip"),
-            'revertChanges()'
+            currentMode,
+            {
+                swapCallback: 'swapDocuments()',
+                revertCallback: 'revertChanges()',
+                saveCallback: 'saveChanges()',
+                modeChangeCallback: 'switchDiffMode'
+            }
         );
         
         dialog = new Dialog({
@@ -441,6 +520,8 @@ export default class PluginSample extends Plugin {
                 delete (window as any).swapDocuments;
                 delete (window as any).revertChanges;
                 delete (window as any).revertLine;
+                delete (window as any).switchDiffMode;
+                delete (window as any).saveChanges;
             }
         });
     }

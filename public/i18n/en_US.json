@@ -70,6 +70,20 @@
         "revertLine": "Revert Line",
         "applyLine": "Apply Line",
         "revertLineTooltip": "Revert this line change",
-        "applyLineTooltip": "Apply this line change"
+        "applyLineTooltip": "Apply this line change",
+        "viewMode": {
+            "unified": "Unified Mode",
+            "sideBySide": "Side-by-Side Mode",
+            "unifiedTooltip": "Unified diff view showing merged difference content",
+            "sideBySideTooltip": "Side-by-side view with left and right panes showing document content"
+        },
+        "saveChanges": "Save Changes",
+        "saveChangesTooltip": "Save modifications to the document",
+        "saveSuccess": "Document saved successfully",
+        "saveError": "Failed to save document",
+        "confirmSave": "Are you sure you want to save changes to the document?",
+        "saveOnlyInSideBySide": "Save function is only available in side-by-side mode",
+        "cannotFindEditArea": "Cannot find edit area",
+        "saveOperationFailed": "Save operation failed"
     }
 }

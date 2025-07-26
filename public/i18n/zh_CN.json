@@ -69,6 +69,20 @@
         "revertLine": "撤回此行",
         "applyLine": "应用此行",
         "revertLineTooltip": "撤回此行的更改",
-        "applyLineTooltip": "应用此行的更改"
+        "applyLineTooltip": "应用此行的更改",
+        "viewMode": {
+            "unified": "合并模式",
+            "sideBySide": "并排模式",
+            "unifiedTooltip": "统一差异视图，显示合并的差异内容",
+            "sideBySideTooltip": "并排视图，左右两个窗口显示文档内容"
+        },
+        "saveChanges": "保存更改",
+        "saveChangesTooltip": "保存对文档的修改",
+        "saveSuccess": "文档已成功保存",
+        "saveError": "保存文档失败",
+        "confirmSave": "确定要保存对文档的更改吗？",
+        "saveOnlyInSideBySide": "保存功能仅在并排模式下可用",
+        "cannotFindEditArea": "无法找到编辑区域",
+        "saveOperationFailed": "保存操作失败"
     }
 }

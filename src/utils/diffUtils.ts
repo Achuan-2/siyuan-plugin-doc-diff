@@ -3,6 +3,11 @@
  * 实现类似GitHub的diff算法
  */
 
+export enum DiffViewMode {
+    UNIFIED = 'unified',    // 合并模式（统一diff视图）
+    SIDE_BY_SIDE = 'side-by-side'  // 并排模式（两个窗口）
+}
+
 export interface DiffLine {
     type: 'added' | 'removed' | 'context';
     oldLineNumber?: number;
@@ -18,6 +23,14 @@ export interface DiffResult {
         deletions: number;
         changes: number;
     };
+}
+
+export interface DiffViewOptions {
+    mode: DiffViewMode;
+    enableLineActions?: boolean;
+    enableEditing?: boolean;  // 是否启用编辑功能（仅在side-by-side模式下有效）
+    showLineNumbers?: boolean;
+    contextLines?: number;
 }
 
 /**
@@ -245,10 +258,25 @@ function calculateStats(diff: DiffLine[]): { additions: number; deletions: numbe
 }
 
 /**
- * 生成差异HTML
+ * 生成差异HTML（通用函数）
  */
-export function generateDiffHtml(doc1: any, doc2: any, enableLineActions: boolean = false): string {
+export function generateDiffHtml(doc1: any, doc2: any, options: DiffViewOptions = { mode: DiffViewMode.UNIFIED }): string {
+    switch (options.mode) {
+        case DiffViewMode.UNIFIED:
+            return generateUnifiedDiffHtml(doc1, doc2, options);
+        case DiffViewMode.SIDE_BY_SIDE:
+            return generateSideBySideDiffHtml(doc1, doc2, options);
+        default:
+            return generateUnifiedDiffHtml(doc1, doc2, options);
+    }
+}
+
+/**
+ * 生成统一差异HTML（合并模式）
+ */
+export function generateUnifiedDiffHtml(doc1: any, doc2: any, options: DiffViewOptions): string {
     const diffResult = computeTextDiff(doc1.content, doc2.content);
+    const enableLineActions = options.enableLineActions || false;
     
     let diffHtml = '';
     
@@ -317,6 +345,86 @@ export function generateDiffHtml(doc1: any, doc2: any, enableLineActions: boolea
 }
 
 /**
+ * 生成并排差异HTML（并排模式）
+ */
+export function generateSideBySideDiffHtml(doc1: any, doc2: any, options: DiffViewOptions): string {
+    const diffResult = computeTextDiff(doc1.content, doc2.content);
+    const enableEditing = options.enableEditing || false;
+    const showLineNumbers = options.showLineNumbers !== false; // 默认显示行号
+    
+    let diffHtml = '';
+    
+    // 添加统计信息
+    const stats = diffResult.stats;
+    diffHtml += `
+        <div class="diff-stats">
+            <span class="diff-stat-item">
+                <span class="diff-stat-additions">+${stats.additions}</span>
+                <span class="diff-stat-deletions">-${stats.deletions}</span>
+            </span>
+        </div>
+    `;
+    
+    // 创建并排布局
+    diffHtml += `
+        <div class="side-by-side-container">
+            <div class="side-by-side-pane left-pane">
+                <div class="pane-header">
+                    <span class="pane-title">${escapeHtml(doc1.title)}</span>
+                    <span class="pane-label old-file">原文档</span>
+                </div>
+                <div class="pane-content" id="left-pane-content">
+    `;
+    
+    // 生成左侧内容（原文档）
+    const leftLines = doc1.content.split('\n');
+    for (let i = 0; i < leftLines.length; i++) {
+        const lineNumber = i + 1;
+        const content = processLineContent(leftLines[i]);
+        diffHtml += `
+            <div class="side-line" data-line-number="${lineNumber}">
+                ${showLineNumbers ? `<div class="side-line-number">${lineNumber}</div>` : ''}
+                <div class="side-line-content">${content}</div>
+            </div>
+        `;
+    }
+    
+    diffHtml += `
+                </div>
+            </div>
+            <div class="side-by-side-pane right-pane">
+                <div class="pane-header">
+                    <span class="pane-title">${escapeHtml(doc2.title)}</span>
+                    <span class="pane-label new-file">新文档</span>
+                    ${enableEditing ? '<button class="save-button" onclick="window.saveChanges && window.saveChanges()" title="保存更改">保存</button>' : ''}
+                </div>
+                <div class="pane-content" id="right-pane-content" ${enableEditing ? 'contenteditable="true"' : ''}>
+    `;
+    
+    // 生成右侧内容（新文档）
+    const rightLines = doc2.content.split('\n');
+    for (let i = 0; i < rightLines.length; i++) {
+        const lineNumber = i + 1;
+        const content = processLineContent(rightLines[i]);
+        const isEditable = enableEditing ? 'contenteditable="true"' : '';
+        diffHtml += `
+            <div class="side-line" data-line-number="${lineNumber}">
+                ${showLineNumbers ? `<div class="side-line-number">${lineNumber}</div>` : ''}
+                <div class="side-line-content" ${isEditable}>${content}</div>
+            </div>
+        `;
+    }
+    
+    diffHtml += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return diffHtml;
+}
+
+/**
  * HTML转义并处理换行和空白字符
  */
 function escapeHtml(text: string): string {
@@ -378,7 +486,10 @@ function processLineContent(content: string): string {
  * 生成可交换的差异视图HTML
  */
 export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: string, tooltipText?: string, revertCallback?: string, applyCallback?: string): string {
-    const diffContent = generateDiffHtml(doc1, doc2, true);
+    const diffContent = generateDiffHtml(doc1, doc2, {
+        mode: DiffViewMode.UNIFIED,
+        enableLineActions: true
+    });
     const callbackFunction = swapCallback || 'window.swapDocuments && window.swapDocuments()';
     const tooltip = tooltipText || '交换文档';
     const revertFunction = revertCallback || 'window.revertChanges && window.revertChanges()';
@@ -707,6 +818,149 @@ export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: s
             .new-line-number {
                 border-right: 1px solid #d1d9e0;
             }
+            
+            /* 并排模式样式 */
+            .side-by-side-container {
+                display: flex;
+                height: 100%;
+                border: 1px solid #d1d9e0;
+                border-radius: 6px;
+                overflow: hidden;
+            }
+            
+            .side-by-side-pane {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+            
+            .side-by-side-pane.left-pane {
+                border-right: 1px solid #d1d9e0;
+            }
+            
+            .pane-header {
+                background: #f6f8fa;
+                border-bottom: 1px solid #d1d9e0;
+                padding: 8px 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-weight: 600;
+                font-size: 14px;
+                position: sticky;
+                top: 0;
+                z-index: 1;
+            }
+            
+            .pane-title {
+                flex: 1;
+                margin-right: 8px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            
+            .pane-label {
+                font-size: 12px;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            
+            .pane-label.old-file {
+                background: #ffeef0;
+                color: #d73a49;
+            }
+            
+            .pane-label.new-file {
+                background: #e6ffed;
+                color: #28a745;
+            }
+            
+            .save-button {
+                background: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 12px;
+                cursor: pointer;
+                margin-left: 8px;
+                transition: background-color 0.2s ease;
+            }
+            
+            .save-button:hover {
+                background: #22863a;
+            }
+            
+            .save-button:active {
+                background: #1e7e34;
+            }
+            
+            .pane-content {
+                flex: 1;
+                overflow-y: auto;
+                background: #fff;
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+                font-size: 12px;
+                line-height: 1.4;
+            }
+            
+            .pane-content[contenteditable="true"] {
+                outline: none;
+                border: 2px solid transparent;
+                transition: border-color 0.2s ease;
+            }
+            
+            .pane-content[contenteditable="true"]:focus {
+                border-color: #0366d6;
+            }
+            
+            .side-line {
+                display: flex;
+                min-height: 20px;
+                border-bottom: 1px solid #f6f8fa;
+            }
+            
+            .side-line:hover {
+                background-color: rgba(0, 0, 0, 0.04);
+            }
+            
+            .side-line-number {
+                width: 50px;
+                padding: 0 8px;
+                text-align: right;
+                background: #f6f8fa;
+                border-right: 1px solid #d1d9e0;
+                color: #586069;
+                user-select: none;
+                font-size: 11px;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+            }
+            
+            .side-line-content {
+                flex: 1;
+                padding: 0 8px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                min-height: 20px;
+                display: flex;
+                align-items: flex-start;
+            }
+            
+            .side-line-content[contenteditable="true"] {
+                outline: none;
+                background: #fff;
+                transition: background-color 0.2s ease;
+            }
+            
+            .side-line-content[contenteditable="true"]:focus {
+                background: #f0f8ff;
+            }
         </style>
     `;
 }
@@ -715,7 +969,7 @@ export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: s
  * 生成完整的差异视图HTML（保持向后兼容）
  */
 export function generateFullDiffHtml(doc1: any, doc2: any): string {
-    const diffContent = generateDiffHtml(doc1, doc2);
+    const diffContent = generateDiffHtml(doc1, doc2, { mode: DiffViewMode.UNIFIED });
     
     return `
         <div class="diff-header">
@@ -904,6 +1158,558 @@ export function generateFullDiffHtml(doc1: any, doc2: any): string {
             }
             .new-line-number {
                 border-right: 1px solid #d1d9e0;
+            }
+        </style>
+    `;
+}
+/**
+ * 生成支持模式切换的差异视图HTML
+ */
+export function generateModeSwitchableDiffHtml(
+    doc1: any, 
+    doc2: any, 
+    currentMode: DiffViewMode = DiffViewMode.UNIFIED,
+    callbacks?: {
+        swapCallback?: string;
+        revertCallback?: string;
+        saveCallback?: string;
+        modeChangeCallback?: string;
+    }
+): string {
+    const options: DiffViewOptions = {
+        mode: currentMode,
+        enableLineActions: currentMode === DiffViewMode.UNIFIED,
+        enableEditing: currentMode === DiffViewMode.SIDE_BY_SIDE,
+        showLineNumbers: true
+    };
+    
+    const diffContent = generateDiffHtml(doc1, doc2, options);
+    
+    const swapFunction = callbacks?.swapCallback || 'window.swapDocuments && window.swapDocuments()';
+    const revertFunction = callbacks?.revertCallback || 'window.revertChanges && window.revertChanges()';
+    const saveFunction = callbacks?.saveCallback || 'window.saveChanges && window.saveChanges()';
+    const modeChangeFunction = callbacks?.modeChangeCallback || 'window.switchDiffMode && window.switchDiffMode';
+    
+    return `
+        <div class="diff-header">
+            <div class="diff-file-header">
+                <div class="diff-file-title old-file">
+                    <span class="diff-file-icon">📄</span>
+                    <span class="diff-file-name">${escapeHtml(doc1.title)}</span>
+                </div>
+                <div class="diff-action-buttons">
+                    <div class="diff-mode-switcher">
+                        <button class="diff-mode-button ${currentMode === DiffViewMode.UNIFIED ? 'active' : ''}" 
+                                onclick="${modeChangeFunction}('${DiffViewMode.UNIFIED}')" 
+                                title="合并模式">
+                            <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor">
+                                <path d="M128 256h768v85.333H128V256z m0 170.667h768v85.333H128v-85.333z m0 170.666h768V682.667H128v-85.334z m0 170.667h768V853.333H128v-85.333z"/>
+                            </svg>
+                            合并
+                        </button>
+                        <button class="diff-mode-button ${currentMode === DiffViewMode.SIDE_BY_SIDE ? 'active' : ''}" 
+                                onclick="${modeChangeFunction}('${DiffViewMode.SIDE_BY_SIDE}')" 
+                                title="并排模式">
+                            <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor">
+                                <path d="M128 128h341.333v768H128V128z m426.667 0H896v768H554.667V128z"/>
+                            </svg>
+                            并排
+                        </button>
+                    </div>
+                    ${currentMode === DiffViewMode.SIDE_BY_SIDE ? 
+                        `<button class="diff-action-button diff-save-button" onclick="${saveFunction}" title="保存更改">
+                            <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor">
+                                <path d="M893.3 293.3L730.7 130.7c-7.5-7.5-16.7-13-26.7-16V112H144c-17.7 0-32 14.3-32 32v736c0 17.7 14.3 32 32 32h736c17.7 0 32-14.3 32-32V338.5c0-17-6.7-33.2-18.7-45.2zM384 184h256v104H384V184z m456 656H184V184h136v136c0 17.7 14.3 32 32 32h320c17.7 0 32-14.3 32-32V205.8l96 96V840z"/>
+                            </svg>
+                            保存
+                        </button>` : ''
+                    }
+                    <button class="diff-action-button diff-revert-button" onclick="${revertFunction}" title="撤回为原文档内容">
+                        <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor">
+                            <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm193.5 301.7l-210.6 292a31.8 31.8 0 0 1-51.7 0L322.5 365.7c-13.7-19.1-2.2-46.7 23.6-46.7h46.4c10.2 0 19.9 4.9 25.9 13.3l71.2 98.8 157.2-218c6-8.3 15.6-13.3 25.9-13.3H719c25.8 0 37.3 27.6 23.5 46.7z" fill="#52c41a"/>
+                        </svg>
+                        撤回
+                    </button>
+                    <button class="diff-swap-button" onclick="${swapFunction}" title="交换文档">
+                        <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor">
+                            <path d="M162.909091 449.163636h681.890909c34.909091 0 65.163636-20.945455 76.8-51.2s6.981818-67.490909-16.290909-93.090909l-146.618182-153.6c-27.927273-27.927273-69.818182-27.927273-97.745454-2.327272-27.927273 25.6-27.927273 69.818182-2.327273 97.745454l58.181818 60.509091H162.909091c-39.563636 0-69.818182 30.254545-69.818182 69.818182s32.581818 72.145455 69.818182 72.145454zM861.090909 574.836364H179.2c-34.909091 0-65.163636 20.945455-76.8 51.2s-6.981818 67.490909 16.290909 93.090909l146.618182 153.6c13.963636 13.963636 32.581818 20.945455 51.2 20.945454 16.290909 0 34.909091-6.981818 48.872727-18.618182 27.927273-25.6 27.927273-69.818182 2.327273-97.745454l-58.181818-60.509091H861.090909c39.563636 0 69.818182-30.254545 69.818182-69.818182s-32.581818-72.145455-69.818182-72.145454z" p-id="5917" fill="#1296db"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="diff-file-title new-file">
+                    <span class="diff-file-icon">📄</span>
+                    <span class="diff-file-name">${escapeHtml(doc2.title)}</span>
+                </div>
+            </div>
+        </div>
+        <div class="diff-content">
+            ${diffContent}
+        </div>
+        <style>
+            .doc-diff-container {
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+                font-size: 12px;
+                line-height: 1.4;
+                background: #fff;
+            }
+            .diff-header {
+                background: #f6f8fa;
+                border-bottom: 1px solid #d1d9e0;
+                padding: 8px 16px;
+                position: sticky;
+                top: 0;
+                z-index: 1;
+            }
+            .diff-file-header {
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 0;
+                position: relative;
+            }
+            .diff-action-buttons {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                padding: 0 8px;
+                position: relative;
+                z-index: 2;
+            }
+            .diff-mode-switcher {
+                display: flex;
+                background: #fff;
+                border: 1px solid #d1d9e0;
+                border-radius: 6px;
+                overflow: hidden;
+                margin-right: 8px;
+            }
+            .diff-mode-button {
+                background: #fff;
+                border: none;
+                padding: 6px 12px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                transition: all 0.2s ease;
+                color: #586069;
+                font-size: 12px;
+                font-weight: 500;
+                border-right: 1px solid #d1d9e0;
+            }
+            .diff-mode-button:last-child {
+                border-right: none;
+            }
+            .diff-mode-button:hover {
+                background: #f6f8fa;
+                color: #24292e;
+            }
+            .diff-mode-button.active {
+                background: #0366d6;
+                color: #fff;
+            }
+            .diff-mode-button.active:hover {
+                background: #0256cc;
+            }
+            .diff-action-button, .diff-swap-button {
+                background: #f6f8fa;
+                border: 1px solid #d1d9e0;
+                border-radius: 6px;
+                padding: 6px 8px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                transition: all 0.2s ease;
+                color: #586069;
+                min-height: 28px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            .diff-action-button:hover, .diff-swap-button:hover {
+                background: #e1e4e8;
+                border-color: #c6cbd1;
+                color: #24292e;
+                transform: scale(1.05);
+            }
+            .diff-action-button:active, .diff-swap-button:active {
+                background: #d1d5da;
+                transform: scale(0.95);
+            }
+            .diff-action-button svg, .diff-swap-button svg {
+                width: 16px;
+                height: 16px;
+                flex-shrink: 0;
+            }
+            .diff-save-button {
+                background: #f6ffed;
+                border-color: #b7eb8f;
+                color: #389e0d;
+            }
+            .diff-save-button:hover {
+                background: #f6ffed;
+                border-color: #95de64;
+                color: #237804;
+            }
+            .diff-revert-button {
+                background: #fff2f0;
+                border-color: #ffccc7;
+                color: #cf1322;
+            }
+            .diff-revert-button:hover {
+                background: #fff1f0;
+                border-color: #ffa39e;
+                color: #a8071a;
+            }
+            .diff-swap-button {
+                min-width: 28px;
+                padding: 6px;
+            }
+            .diff-file-title {
+                display: flex;
+                align-items: center;
+                font-weight: 600;
+                font-size: 14px;
+                position: relative;
+                flex: 1;
+                padding: 8px 16px;
+            }
+            .diff-file-title.old-file {
+                border-right: 2px solid #d1d9e0;
+            }
+            .diff-file-title.new-file {
+                border-left: 2px solid #d1d9e0;
+                margin-left: -2px;
+            }
+            .diff-file-icon {
+                margin-right: 8px;
+            }
+            .old-file {
+                color: #d73a49;
+            }
+            .new-file {
+                color: #28a745;
+            }
+            .diff-stats {
+                background: #f6f8fa;
+                padding: 8px 16px;
+                border-bottom: 1px solid #d1d9e0;
+                font-size: 12px;
+            }
+            .diff-stat-item {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+            }
+            .diff-stat-additions {
+                color: #28a745;
+                font-weight: 600;
+            }
+            .diff-stat-deletions {
+                color: #d73a49;
+                font-weight: 600;
+            }
+            .diff-content {
+                background: #fff;
+                overflow-x: auto;
+            }
+            .diff-line {
+                display: flex;
+                font-family: inherit;
+                font-size: inherit;
+                line-height: inherit;
+                min-height: 20px;
+                position: relative;
+            }
+            .diff-line:hover {
+                background-color: rgba(0, 0, 0, 0.04);
+            }
+            .diff-line:hover .diff-line-actions {
+                opacity: 1;
+            }
+            .diff-line-actions {
+                position: absolute;
+                right: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                opacity: 0;
+                transition: opacity 0.2s ease;
+                z-index: 10;
+            }
+            .diff-line-action-btn {
+                background: rgba(255, 255, 255, 0.9);
+                border: 1px solid #d1d9e0;
+                border-radius: 4px;
+                padding: 2px 4px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                color: #586069;
+                font-size: 10px;
+                min-width: 20px;
+                min-height: 16px;
+                margin-left: 2px;
+            }
+            .diff-line-action-btn:hover {
+                background: #fff;
+                border-color: #c6cbd1;
+                transform: scale(1.1);
+            }
+            .diff-line-action-btn:active {
+                transform: scale(0.95);
+            }
+            .diff-revert-line-btn {
+                color: #d73a49;
+                border-color: #fdb8c0;
+            }
+            .diff-revert-line-btn:hover {
+                background: #ffeef0;
+                border-color: #f97583;
+                color: #cb2431;
+            }
+            .diff-line-action-btn svg {
+                width: 12px;
+                height: 12px;
+            }
+            .diff-line-number {
+                width: 50px;
+                padding: 0 8px;
+                text-align: right;
+                background: #f6f8fa;
+                border-right: 1px solid #d1d9e0;
+                color: #586069;
+                user-select: none;
+                font-size: 11px;
+                flex-shrink: 0;
+            }
+            .diff-line-content {
+                flex: 1;
+                padding: 0 8px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                overflow-x: auto;
+                min-height: 20px;
+                display: flex;
+                align-items: flex-start;
+            }
+            .diff-prefix {
+                display: inline-block;
+                width: 14px;
+                flex-shrink: 0;
+                font-weight: bold;
+            }
+
+            .leading-whitespace,
+            .trailing-whitespace {
+                background-color: rgba(255, 0, 0, 0.1);
+                border-radius: 2px;
+                position: relative;
+            }
+            .leading-whitespace::before,
+            .trailing-whitespace::before {
+                content: '·';
+                position: absolute;
+                color: rgba(0, 0, 0, 0.3);
+                font-size: 8px;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+            }
+            .diff-line-added .leading-whitespace,
+            .diff-line-added .trailing-whitespace {
+                background-color: rgba(40, 167, 69, 0.2);
+            }
+            .diff-line-removed .leading-whitespace,
+            .diff-line-removed .trailing-whitespace {
+                background-color: rgba(215, 58, 73, 0.2);
+            }
+            .diff-line-added {
+                background: #e6ffed;
+                color: #24292e;
+            }
+            .diff-line-added .diff-line-number {
+                background: #cdffd8;
+            }
+            .diff-line-removed {
+                background: #ffeef0;
+                color: #24292e;
+            }
+            .diff-line-removed .diff-line-number {
+                background: #fdb8c0;
+            }
+            /* ID行使用淡色样式 */
+            .diff-line-id.diff-line-added {
+                background: #f0fff4;
+                color: #6a737d;
+            }
+            .diff-line-id.diff-line-added .diff-line-number {
+                background: #e6ffed;
+            }
+            .diff-line-id.diff-line-removed {
+                background: #fef8f8;
+                color: #6a737d;
+            }
+            .diff-line-id.diff-line-removed .diff-line-number {
+                background: #ffeef0;
+            }
+            .diff-line-context {
+                background: #fff;
+                color: #24292e;
+            }
+            .old-line-number {
+                border-right: 1px solid #d1d9e0;
+            }
+            .new-line-number {
+                border-right: 1px solid #d1d9e0;
+            }
+            
+            /* 并排模式样式 */
+            .side-by-side-container {
+                display: flex;
+                height: 100%;
+                border: 1px solid #d1d9e0;
+                border-radius: 6px;
+                overflow: hidden;
+            }
+            
+            .side-by-side-pane {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                min-width: 0;
+            }
+            
+            .side-by-side-pane.left-pane {
+                border-right: 1px solid #d1d9e0;
+            }
+            
+            .pane-header {
+                background: #f6f8fa;
+                border-bottom: 1px solid #d1d9e0;
+                padding: 8px 12px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-weight: 600;
+                font-size: 14px;
+                position: sticky;
+                top: 0;
+                z-index: 1;
+            }
+            
+            .pane-title {
+                flex: 1;
+                margin-right: 8px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            
+            .pane-label {
+                font-size: 12px;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-weight: 500;
+            }
+            
+            .pane-label.old-file {
+                background: #ffeef0;
+                color: #d73a49;
+            }
+            
+            .pane-label.new-file {
+                background: #e6ffed;
+                color: #28a745;
+            }
+            
+            .save-button {
+                background: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 12px;
+                cursor: pointer;
+                margin-left: 8px;
+                transition: background-color 0.2s ease;
+            }
+            
+            .save-button:hover {
+                background: #22863a;
+            }
+            
+            .save-button:active {
+                background: #1e7e34;
+            }
+            
+            .pane-content {
+                flex: 1;
+                overflow-y: auto;
+                background: #fff;
+                font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+                font-size: 12px;
+                line-height: 1.4;
+            }
+            
+            .pane-content[contenteditable="true"] {
+                outline: none;
+                border: 2px solid transparent;
+                transition: border-color 0.2s ease;
+            }
+            
+            .pane-content[contenteditable="true"]:focus {
+                border-color: #0366d6;
+            }
+            
+            .side-line {
+                display: flex;
+                min-height: 20px;
+                border-bottom: 1px solid #f6f8fa;
+            }
+            
+            .side-line:hover {
+                background-color: rgba(0, 0, 0, 0.04);
+            }
+            
+            .side-line-number {
+                width: 50px;
+                padding: 0 8px;
+                text-align: right;
+                background: #f6f8fa;
+                border-right: 1px solid #d1d9e0;
+                color: #586069;
+                user-select: none;
+                font-size: 11px;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+            }
+            
+            .side-line-content {
+                flex: 1;
+                padding: 0 8px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                min-height: 20px;
+                display: flex;
+                align-items: flex-start;
+            }
+            
+            .side-line-content[contenteditable="true"] {
+                outline: none;
+                background: #fff;
+                transition: background-color 0.2s ease;
+            }
+            
+            .side-line-content[contenteditable="true"]:focus {
+                background: #f0f8ff;
             }
         </style>
     `;
