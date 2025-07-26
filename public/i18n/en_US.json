@@ -59,6 +59,17 @@
         "cannotGetDocInfo": "Cannot get document information",
         "getDocInfoFailed": "Failed to get document information",
         "swapDocuments": "Swap Documents",
-        "swapDocumentsTooltip": "Swap the comparison order of old and new documents"
+        "swapDocumentsTooltip": "Swap the comparison order of old and new documents",
+        "revertChanges": "Revert Changes",
+        "revertChangesTooltip": "Revert to original document content",
+        "revertSuccess": "Changes reverted successfully",
+        "revertError": "Failed to revert changes",
+        "confirmRevert": "Are you sure you want to revert all changes? This will restore the document to its original state.",
+        "applyChanges": "Apply Changes",
+        "applyChangesTooltip": "Apply the content from the right document to the left document",
+        "revertLine": "Revert Line",
+        "applyLine": "Apply Line",
+        "revertLineTooltip": "Revert this line change",
+        "applyLineTooltip": "Apply this line change"
     }
 }

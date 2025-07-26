@@ -15,6 +15,11 @@
     "update-version": "node --no-warnings ./scripts/update_version.js",
     "make-install": "vite build && node --no-warnings ./scripts/make_install.js"
   },
+  "dependencies": {
+    "@workspace/components": "workspace:^",
+    "@workspace/types": "workspace:^",
+    "@workspace/utils": "workspace:^"
+  },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.1.0",
     "@tsconfig/svelte": "^4.0.1",

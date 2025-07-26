@@ -58,6 +58,17 @@
         "cannotGetDocInfo": "无法获取文档信息",
         "getDocInfoFailed": "获取文档信息失败",
         "swapDocuments": "交换文档",
-        "swapDocumentsTooltip": "交换新旧文档的对比顺序"
+        "swapDocumentsTooltip": "交换新旧文档的对比顺序",
+        "revertChanges": "撤回更改",
+        "revertChangesTooltip": "撤回为原文档内容",
+        "revertSuccess": "已成功撤回更改",
+        "revertError": "撤回更改失败",
+        "confirmRevert": "确定要撤回所有更改吗？此操作将恢复文档到原始状态。",
+        "applyChanges": "应用更改",
+        "applyChangesTooltip": "将右侧文档的内容应用到左侧文档",
+        "revertLine": "撤回此行",
+        "applyLine": "应用此行",
+        "revertLineTooltip": "撤回此行的更改",
+        "applyLineTooltip": "应用此行的更改"
     }
 }

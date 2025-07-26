@@ -247,7 +247,7 @@ function calculateStats(diff: DiffLine[]): { additions: number; deletions: numbe
 /**
  * 生成差异HTML
  */
-export function generateDiffHtml(doc1: any, doc2: any): string {
+export function generateDiffHtml(doc1: any, doc2: any, enableLineActions: boolean = false): string {
     const diffResult = computeTextDiff(doc1.content, doc2.content);
     
     let diffHtml = '';
@@ -264,22 +264,38 @@ export function generateDiffHtml(doc1: any, doc2: any): string {
     `;
     
     // 生成差异行
-    for (const line of diffResult.lines) {
+    for (let i = 0; i < diffResult.lines.length; i++) {
+        const line = diffResult.lines[i];
         const oldLineNum = line.oldLineNumber || '';
         const newLineNum = line.newLineNumber || '';
         const content = processLineContent(line.content);
         
         let lineClass = '';
         let prefix = '';
+        let actionButtons = '';
         
         switch (line.type) {
             case 'added':
                 lineClass = line.isIdLine ? 'diff-line-added diff-line-id' : 'diff-line-added';
                 prefix = '<span class="diff-prefix">+</span>';
+                if (enableLineActions) {
+                    actionButtons = `
+                        <div class="diff-line-actions">
+                            <button class="diff-line-action-btn diff-revert-line-btn"
+                                    onclick="window.revertLine && window.revertLine(${i}, 'added')"
+                                    title="撤回到原文档内容">
+                                <svg width="12" height="12" viewBox="0 0 1024 1024" fill="currentColor">
+                                    <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm193.5 301.7l-210.6 292a31.8 31.8 0 0 1-51.7 0L322.5 365.7c-13.7-19.1-2.2-46.7 23.6-46.7h46.4c10.2 0 19.9 4.9 25.9 13.3l71.2 98.8 157.2-218c6-8.3 15.6-13.3 25.9-13.3H719c25.8 0 37.3 27.6 23.5 46.7z"/>
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                }
                 break;
             case 'removed':
                 lineClass = line.isIdLine ? 'diff-line-removed diff-line-id' : 'diff-line-removed';
                 prefix = '<span class="diff-prefix">-</span>';
+                // 原文档被删除的行不显示接受按钮
                 break;
             case 'context':
                 lineClass = 'diff-line-context';
@@ -288,10 +304,11 @@ export function generateDiffHtml(doc1: any, doc2: any): string {
         }
         
         diffHtml += `
-            <div class="diff-line ${lineClass}">
+            <div class="diff-line ${lineClass}" data-line-index="${i}">
                 <div class="diff-line-number old-line-number">${oldLineNum}</div>
                 <div class="diff-line-number new-line-number">${newLineNum}</div>
                 <div class="diff-line-content">${prefix}${content}</div>
+                ${actionButtons}
             </div>
         `;
     }
@@ -360,10 +377,11 @@ function processLineContent(content: string): string {
 /**
  * 生成可交换的差异视图HTML
  */
-export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: string, tooltipText?: string): string {
-    const diffContent = generateDiffHtml(doc1, doc2);
+export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: string, tooltipText?: string, revertCallback?: string, applyCallback?: string): string {
+    const diffContent = generateDiffHtml(doc1, doc2, true);
     const callbackFunction = swapCallback || 'window.swapDocuments && window.swapDocuments()';
     const tooltip = tooltipText || '交换文档';
+    const revertFunction = revertCallback || 'window.revertChanges && window.revertChanges()';
     
     return `
         <div class="diff-header">
@@ -372,11 +390,17 @@ export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: s
                     <span class="diff-file-icon">📄</span>
                     <span class="diff-file-name">${escapeHtml(doc1.title)}</span>
                 </div>
-                <div class="diff-swap-button-container">
+                <div class="diff-action-buttons">
+                    <button class="diff-action-button diff-revert-button" onclick="${revertFunction}" title="${escapeHtml('撤回为原文档内容')}">
+                        <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor">
+                            <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm193.5 301.7l-210.6 292a31.8 31.8 0 0 1-51.7 0L322.5 365.7c-13.7-19.1-2.2-46.7 23.6-46.7h46.4c10.2 0 19.9 4.9 25.9 13.3l71.2 98.8 157.2-218c6-8.3 15.6-13.3 25.9-13.3H719c25.8 0 37.3 27.6 23.5 46.7z" fill="#52c41a"/>
+                        </svg>
+                        撤回
+                    </button>
                     <button class="diff-swap-button" onclick="${callbackFunction}" title="${escapeHtml(tooltip)}">
                         <svg width="16" height="16" viewBox="0 0 1024 1024" fill="currentColor">
 <path d="M162.909091 449.163636h681.890909c34.909091 0 65.163636-20.945455 76.8-51.2s6.981818-67.490909-16.290909-93.090909l-146.618182-153.6c-27.927273-27.927273-69.818182-27.927273-97.745454-2.327272-27.927273 25.6-27.927273 69.818182-2.327273 97.745454l58.181818 60.509091H162.909091c-39.563636 0-69.818182 30.254545-69.818182 69.818182s32.581818 72.145455 69.818182 72.145454zM861.090909 574.836364H179.2c-34.909091 0-65.163636 20.945455-76.8 51.2s-6.981818 67.490909 16.290909 93.090909l146.618182 153.6c13.963636 13.963636 32.581818 20.945455 51.2 20.945454 16.290909 0 34.909091-6.981818 48.872727-18.618182 27.927273-25.6 27.927273-69.818182 2.327273-97.745454l-58.181818-60.509091H861.090909c39.563636 0 69.818182-30.254545 69.818182-69.818182s-32.581818-72.145455-69.818182-72.145454z" p-id="5917" fill="#1296db"></path>
-                        </svg>  
+                        </svg>
                     </button>
                 </div>
                 <div class="diff-file-title new-file">
@@ -410,41 +434,69 @@ export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: s
                 gap: 0;
                 position: relative;
             }
-            .diff-swap-button-container {
+            .diff-action-buttons {
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                gap: 8px;
                 padding: 0 8px;
                 position: relative;
                 z-index: 2;
             }
-            .diff-swap-button {
+            .diff-action-button, .diff-swap-button {
                 background: #f6f8fa;
                 border: 1px solid #d1d9e0;
                 border-radius: 6px;
-                padding: 6px;
+                padding: 6px 8px;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                gap: 4px;
                 transition: all 0.2s ease;
                 color: #586069;
-                min-width: 28px;
                 min-height: 28px;
+                font-size: 12px;
+                font-weight: 500;
             }
-            .diff-swap-button:hover {
+            .diff-action-button:hover, .diff-swap-button:hover {
                 background: #e1e4e8;
                 border-color: #c6cbd1;
                 color: #24292e;
                 transform: scale(1.05);
             }
-            .diff-swap-button:active {
+            .diff-action-button:active, .diff-swap-button:active {
                 background: #d1d5da;
                 transform: scale(0.95);
             }
-            .diff-swap-button svg {
+            .diff-action-button svg, .diff-swap-button svg {
                 width: 16px;
                 height: 16px;
+                flex-shrink: 0;
+            }
+            .diff-revert-button {
+                background: #fff2f0;
+                border-color: #ffccc7;
+                color: #cf1322;
+            }
+            .diff-revert-button:hover {
+                background: #fff1f0;
+                border-color: #ffa39e;
+                color: #a8071a;
+            }
+            .diff-apply-button {
+                background: #f6ffed;
+                border-color: #b7eb8f;
+                color: #389e0d;
+            }
+            .diff-apply-button:hover {
+                background: #f6ffed;
+                border-color: #95de64;
+                color: #237804;
+            }
+            .diff-swap-button {
+                min-width: 28px;
+                padding: 6px;
             }
             .diff-file-title {
                 display: flex;
@@ -500,9 +552,68 @@ export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: s
                 font-size: inherit;
                 line-height: inherit;
                 min-height: 20px;
+                position: relative;
             }
             .diff-line:hover {
                 background-color: rgba(0, 0, 0, 0.04);
+            }
+            .diff-line:hover .diff-line-actions {
+                opacity: 1;
+            }
+            .diff-line-actions {
+                position: absolute;
+                right: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                opacity: 0;
+                transition: opacity 0.2s ease;
+                z-index: 10;
+            }
+            .diff-line-action-btn {
+                background: rgba(255, 255, 255, 0.9);
+                border: 1px solid #d1d9e0;
+                border-radius: 4px;
+                padding: 2px 4px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                color: #586069;
+                font-size: 10px;
+                min-width: 20px;
+                min-height: 16px;
+                margin-left: 2px;
+            }
+            .diff-line-action-btn:hover {
+                background: #fff;
+                border-color: #c6cbd1;
+                transform: scale(1.1);
+            }
+            .diff-line-action-btn:active {
+                transform: scale(0.95);
+            }
+            .diff-revert-line-btn {
+                color: #d73a49;
+                border-color: #fdb8c0;
+            }
+            .diff-revert-line-btn:hover {
+                background: #ffeef0;
+                border-color: #f97583;
+                color: #cb2431;
+            }
+            .diff-apply-line-btn {
+                color: #28a745;
+                border-color: #a2cbac;
+            }
+            .diff-apply-line-btn:hover {
+                background: #f0fff4;
+                border-color: #34d058;
+                color: #22863a;
+            }
+            .diff-line-action-btn svg {
+                width: 12px;
+                height: 12px;
             }
             .diff-line-number {
                 width: 50px;

@@ -25,7 +25,7 @@ import SettingPanel from "./setting-example.svelte";
 import { getDefaultSettings } from "./defaultSettings";
 import { setPluginInstance, t } from "./utils/i18n";
 import LoadingDialog from "./components/LoadingDialog.svelte";
-import { generateFullDiffHtml, generateSwappableDiffHtml } from "./utils/diffUtils";
+import { generateFullDiffHtml, generateSwappableDiffHtml, computeTextDiff } from "./utils/diffUtils";
 
 export const SETTINGS_FILE = "settings.json";
 
@@ -240,8 +240,24 @@ export default class PluginSample extends Plugin {
         let currentDoc2 = doc2;
         let dialog: Dialog;
         
+        // 保存原始内容用于撤回
+        const originalDoc1Content = doc1.content;
+        const originalDoc2Content = doc2.content;
+        
+        // 保存当前的差异结果用于行级操作
+        let currentDiffResult: any = null;
+        
         const updateDiffContent = () => {
-            const diffHtml = generateSwappableDiffHtml(currentDoc1, currentDoc2, 'swapDocuments()', t("docDiff.swapDocumentsTooltip"));
+            // 计算并保存当前的差异结果
+            currentDiffResult = computeTextDiff(currentDoc1.content, currentDoc2.content);
+            
+            const diffHtml = generateSwappableDiffHtml(
+                currentDoc1,
+                currentDoc2,
+                'swapDocuments()',
+                t("docDiff.swapDocumentsTooltip"),
+                'revertChanges()'
+            );
             const container = dialog.element.querySelector('.doc-diff-container');
             if (container) {
                 container.innerHTML = diffHtml;
@@ -259,10 +275,127 @@ export default class PluginSample extends Plugin {
             updateDiffContent();
         };
         
-        // 将交换函数暴露到全局，以便HTML中的按钮可以调用
-        (window as any).swapDocuments = swapDocuments;
+        const revertChanges = async () => {
+            try {
+                // 使用 confirm 函数显示确认对话框
+                confirm(
+                    t("docDiff.revertChanges"),
+                    t("docDiff.confirmRevert"),
+                    async () => {
+                        try {
+                            // 将新文档内容撤回为旧文档内容
+                            // 新文档是右侧文档（currentDoc2），旧文档是左侧文档（currentDoc1）
+                            const newDocId = currentDoc2.id;
+                            const oldDocContent = currentDoc1.content;
+                            
+                            // 使用 updateBlock API 将新文档内容更新为旧文档内容
+                            await updateBlock("markdown", oldDocContent, newDocId);
+                            
+                            showMessage(t("docDiff.revertSuccess"));
+                            
+                            // 关闭对话框
+                            dialog.destroy();
+                        } catch (error) {
+                            console.error("撤回更改失败:", error);
+                            const errorMessage = error instanceof Error ? error.message : String(error);
+                            pushErrMsg(`${t("docDiff.revertError")}: ${errorMessage}`);
+                        }
+                    }
+                );
+            } catch (error) {
+                console.error("显示确认对话框失败:", error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                pushErrMsg(`${t("docDiff.revertError")}: ${errorMessage}`);
+            }
+        };
         
-        const initialDiffHtml = generateSwappableDiffHtml(currentDoc1, currentDoc2, 'swapDocuments()', t("docDiff.swapDocumentsTooltip"));
+        
+        const revertLine = async (lineIndex: number, lineType: string) => {
+            try {
+                if (!currentDiffResult || !currentDiffResult.lines[lineIndex]) {
+                    pushErrMsg("无法找到指定的差异行");
+                    return;
+                }
+                
+                const diffLine = currentDiffResult.lines[lineIndex];
+                const targetDocId = isSwapped ? currentDoc2.id : currentDoc1.id;
+                
+                if (lineType === 'added' && diffLine.newLineNumber && diffLine.oldLineNumber) {
+                    // 撤回新增行：将其替换为原文档的对应行内容
+                    // 需要找到原文档中对应位置的内容
+                    const originalContent = isSwapped ? originalDoc2Content : originalDoc1Content;
+                    const originalLines = originalContent.split('\n');
+                    const originalLineIndex = diffLine.oldLineNumber - 1;
+                    
+                    if (originalLineIndex >= 0 && originalLineIndex < originalLines.length) {
+                        // 获取当前文档内容
+                        const currentContent = (await exportMdContent(targetDocId)).content;
+                        const currentLines = currentContent.split('\n');
+                        const currentLineIndex = diffLine.newLineNumber - 1;
+                        
+                        if (currentLineIndex >= 0 && currentLineIndex < currentLines.length) {
+                            // 将当前行替换为原文档的对应行
+                            currentLines[currentLineIndex] = originalLines[originalLineIndex];
+                            const newContent = currentLines.join('\n');
+                            await updateBlock("markdown", newContent, targetDocId);
+                            showMessage("已撤回到原文档内容");
+                            
+                            // 刷新差异视图
+                            const updatedDocInfo = await this.getDocumentInfo(targetDocId, 'markdown');
+                            if (isSwapped) {
+                                currentDoc2 = updatedDocInfo;
+                            } else {
+                                currentDoc1 = updatedDocInfo;
+                            }
+                            updateDiffContent();
+                        }
+                    }
+                } else if (lineType === 'added' && diffLine.newLineNumber && !diffLine.oldLineNumber) {
+                    // 如果是纯新增行（没有对应的原文档行），则删除该行
+                    const currentContent = (await exportMdContent(targetDocId)).content;
+                    const lines = currentContent.split('\n');
+                    const lineNum = diffLine.newLineNumber - 1;
+                    
+                    if (lineNum >= 0 && lineNum < lines.length) {
+                        lines.splice(lineNum, 1);
+                        const newContent = lines.join('\n');
+                        await updateBlock("markdown", newContent, targetDocId);
+                        showMessage("已撤回此行的新增");
+                        
+                        // 刷新差异视图
+                        const updatedDocInfo = await this.getDocumentInfo(targetDocId, 'markdown');
+                        if (isSwapped) {
+                            currentDoc2 = updatedDocInfo;
+                        } else {
+                            currentDoc1 = updatedDocInfo;
+                        }
+                        updateDiffContent();
+                    }
+                }
+            } catch (error) {
+                console.error("撤回行失败:", error);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                pushErrMsg(`撤回行失败: ${errorMessage}`);
+            }
+        };
+        
+        // applyLine 函数已移除，因为原文档被删除的行不显示接受按钮
+        
+        // 将函数暴露到全局，以便HTML中的按钮可以调用
+        (window as any).swapDocuments = swapDocuments;
+        (window as any).revertChanges = revertChanges;
+        (window as any).revertLine = revertLine;
+        
+        // 初始化差异结果
+        currentDiffResult = computeTextDiff(currentDoc1.content, currentDoc2.content);
+        
+        const initialDiffHtml = generateSwappableDiffHtml(
+            currentDoc1,
+            currentDoc2,
+            'swapDocuments()',
+            t("docDiff.swapDocumentsTooltip"),
+            'revertChanges()'
+        );
         
         dialog = new Dialog({
             title: t("docDiff.diffTitle"),
@@ -274,6 +407,8 @@ export default class PluginSample extends Plugin {
             destroyCallback: () => {
                 // 清理全局函数
                 delete (window as any).swapDocuments;
+                delete (window as any).revertChanges;
+                delete (window as any).revertLine;
             }
         });
     }

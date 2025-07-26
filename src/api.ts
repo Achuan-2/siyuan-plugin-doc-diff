@@ -523,7 +523,7 @@ export async function readDir(path: string): Promise<IResReadDir> {
 
 // **************************************** Export ****************************************
 
-export async function exportMdContent(id: DocumentId,yfm: boolean=true,fillCSSVar: boolean=false): Promise<IResExportMdContent> {
+export async function exportMdContent(id: DocumentId,yfm: boolean=false,fillCSSVar: boolean=false): Promise<IResExportMdContent> {
     let data = {
         id: id,
         yfm: yfm,
