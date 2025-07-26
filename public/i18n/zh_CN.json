@@ -48,6 +48,8 @@
     },
     "docDiff": {
         "compareDocuments": "比较文档差异",
+        "compareDocumentsMarkdown": "比较文档差异（Markdown）",
+        "compareDocumentsKramdown": "比较文档差异（Kramdown）",
         "loading": "加载中",
         "loadingContent": "正在获取文档内容...",
         "diffTitle": "文档差异比较",

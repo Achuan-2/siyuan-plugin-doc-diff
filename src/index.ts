@@ -125,12 +125,21 @@ export default class PluginSample extends Plugin {
             if (docIds.length === 2) {
                 this.selectedDocuments = docIds;
 
-                // 添加菜单项
+                // 添加 Markdown 格式比较菜单项
                 detail.menu.addItem({
                     icon: "iconSort",
-                    label: t("docDiff.compareDocuments"),
+                    label: t("docDiff.compareDocumentsMarkdown"),
                     click: () => {
-                        this.compareDocuments(docIds[0], docIds[1]);
+                        this.compareDocuments(docIds[0], docIds[1], 'markdown');
+                    }
+                });
+
+                // 添加 Kramdown 格式比较菜单项
+                detail.menu.addItem({
+                    icon: "iconSort",
+                    label: t("docDiff.compareDocumentsKramdown"),
+                    click: () => {
+                        this.compareDocuments(docIds[0], docIds[1], 'kramdown');
                     }
                 });
             }
@@ -140,7 +149,7 @@ export default class PluginSample extends Plugin {
     /**
      * 比较两个文档
      */
-    private async compareDocuments(docId1: string, docId2: string) {
+    private async compareDocuments(docId1: string, docId2: string, format: 'markdown' | 'kramdown' = 'markdown') {
         if (!docId1 || !docId2) {
             pushErrMsg(t("docDiff.error") + ": " + t("docDiff.invalidDocId"));
             return;
@@ -164,8 +173,8 @@ export default class PluginSample extends Plugin {
 
             // 获取两个文档的信息
             const [doc1Info, doc2Info] = await Promise.all([
-                this.getDocumentInfo(docId1),
-                this.getDocumentInfo(docId2)
+                this.getDocumentInfo(docId1, format),
+                this.getDocumentInfo(docId2, format)
             ]);
 
             if (loadingDialog) {
@@ -194,12 +203,17 @@ export default class PluginSample extends Plugin {
     /**
      * 获取文档信息（标题和内容）
      */
-    private async getDocumentInfo(docId: string) {
+    private async getDocumentInfo(docId: string, format: 'markdown' | 'kramdown' = 'markdown') {
         try {
-            const [titleResult, contentResult] = await Promise.all([
-                getBlockByID(docId),
-                exportMdContent(docId)
-            ]);
+            const titleResult = await getBlockByID(docId);
+            let contentResult;
+
+            // 根据格式参数获取不同的内容
+            if (format === 'kramdown') {
+                contentResult = await getBlockKramdown(docId);
+            } else {
+                contentResult = await exportMdContent(docId);
+            }
 
             // 检查返回结果是否有效
             if (!titleResult || !contentResult) {
@@ -209,7 +223,7 @@ export default class PluginSample extends Plugin {
             return {
                 id: docId,
                 title: titleResult.content || `文档 ${docId}`,
-                content: contentResult.content || ''
+                content: format === 'kramdown' ? contentResult.kramdown || '' : contentResult.content || ''
             };
         } catch (error) {
             console.error(`${t("docDiff.getDocInfoFailed")} (${docId}):`, error);

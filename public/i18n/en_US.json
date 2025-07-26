@@ -49,6 +49,8 @@
     },
     "docDiff": {
         "compareDocuments": "Compare Documents",
+        "compareDocumentsMarkdown": "Compare Documents (Markdown)",
+        "compareDocumentsKramdown": "Compare Documents (Kramdown)",
         "loading": "Loading",
         "loadingContent": "Loading document content...",
         "diffTitle": "Document Diff Comparison",
