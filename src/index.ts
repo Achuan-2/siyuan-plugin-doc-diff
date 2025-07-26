@@ -318,57 +318,89 @@ export default class PluginSample extends Plugin {
                 }
                 
                 const diffLine = currentDiffResult.lines[lineIndex];
-                const targetDocId = isSwapped ? currentDoc2.id : currentDoc1.id;
+                // 新文档始终是右侧文档（currentDoc2），这是我们要修改的目标文档
+                const newDocId = currentDoc2.id;
+                // 旧文档始终是左侧文档（currentDoc1），这是我们要恢复到的原始内容
+                const oldDocContent = currentDoc1.content;
                 
                 if (lineType === 'added' && diffLine.newLineNumber && diffLine.oldLineNumber) {
-                    // 撤回新增行：将其替换为原文档的对应行内容
-                    // 需要找到原文档中对应位置的内容
-                    const originalContent = isSwapped ? originalDoc2Content : originalDoc1Content;
-                    const originalLines = originalContent.split('\n');
-                    const originalLineIndex = diffLine.oldLineNumber - 1;
+                    // 撤回修改行：将新文档的该行替换为旧文档的对应行内容
+                    const oldLines = oldDocContent.split('\n');
+                    const oldLineIndex = diffLine.oldLineNumber - 1;
                     
-                    if (originalLineIndex >= 0 && originalLineIndex < originalLines.length) {
-                        // 获取当前文档内容
-                        const currentContent = (await exportMdContent(targetDocId)).content;
-                        const currentLines = currentContent.split('\n');
-                        const currentLineIndex = diffLine.newLineNumber - 1;
+                    if (oldLineIndex >= 0 && oldLineIndex < oldLines.length) {
+                        // 获取新文档当前内容
+                        const newDocCurrentContent = (await exportMdContent(newDocId)).content;
+                        const newLines = newDocCurrentContent.split('\n');
+                        const newLineIndex = diffLine.newLineNumber - 1;
                         
-                        if (currentLineIndex >= 0 && currentLineIndex < currentLines.length) {
-                            // 将当前行替换为原文档的对应行
-                            currentLines[currentLineIndex] = originalLines[originalLineIndex];
-                            const newContent = currentLines.join('\n');
-                            await updateBlock("markdown", newContent, targetDocId);
+                        if (newLineIndex >= 0 && newLineIndex < newLines.length) {
+                            // 将新文档的当前行替换为旧文档的对应行
+                            newLines[newLineIndex] = oldLines[oldLineIndex];
+                            const updatedContent = newLines.join('\n');
+                            await updateBlock("markdown", updatedContent, newDocId);
                             showMessage("已撤回到原文档内容");
                             
-                            // 刷新差异视图
-                            const updatedDocInfo = await this.getDocumentInfo(targetDocId, 'markdown');
-                            if (isSwapped) {
-                                currentDoc2 = updatedDocInfo;
-                            } else {
-                                currentDoc1 = updatedDocInfo;
-                            }
+                            // 刷新差异视图 - 更新新文档（右侧文档）
+                            const updatedDocInfo = await this.getDocumentInfo(newDocId, 'markdown');
+                            currentDoc2 = updatedDocInfo;
                             updateDiffContent();
                         }
                     }
                 } else if (lineType === 'added' && diffLine.newLineNumber && !diffLine.oldLineNumber) {
-                    // 如果是纯新增行（没有对应的原文档行），则删除该行
-                    const currentContent = (await exportMdContent(targetDocId)).content;
-                    const lines = currentContent.split('\n');
-                    const lineNum = diffLine.newLineNumber - 1;
+                    // 撤回纯新增行：将该行替换为旧文档中对应位置的行内容
+                    const oldLines = oldDocContent.split('\n');
+                    const newDocCurrentContent = (await exportMdContent(newDocId)).content;
+                    const newLines = newDocCurrentContent.split('\n');
+                    const newLineIndex = diffLine.newLineNumber - 1;
                     
-                    if (lineNum >= 0 && lineNum < lines.length) {
-                        lines.splice(lineNum, 1);
-                        const newContent = lines.join('\n');
-                        await updateBlock("markdown", newContent, targetDocId);
-                        showMessage("已撤回此行的新增");
+                    if (newLineIndex >= 0 && newLineIndex < newLines.length) {
+                        // 通过分析差异结果来找到更准确的对应位置
+                        let correspondingOldLineIndex = -1;
                         
-                        // 刷新差异视图
-                        const updatedDocInfo = await this.getDocumentInfo(targetDocId, 'markdown');
-                        if (isSwapped) {
-                            currentDoc2 = updatedDocInfo;
-                        } else {
-                            currentDoc1 = updatedDocInfo;
+                        // 向前查找最近的有oldLineNumber的行
+                        for (let i = lineIndex - 1; i >= 0; i--) {
+                            const prevLine = currentDiffResult.lines[i];
+                            if (prevLine.oldLineNumber) {
+                                correspondingOldLineIndex = prevLine.oldLineNumber - 1;
+                                break;
+                            }
                         }
+                        
+                        // 如果没有找到前面的参考行，向后查找
+                        if (correspondingOldLineIndex === -1) {
+                            for (let i = lineIndex + 1; i < currentDiffResult.lines.length; i++) {
+                                const nextLine = currentDiffResult.lines[i];
+                                if (nextLine.oldLineNumber) {
+                                    // 使用前一行作为对应位置
+                                    correspondingOldLineIndex = Math.max(0, nextLine.oldLineNumber - 2);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // 如果还是没找到，使用简单的位置映射
+                        if (correspondingOldLineIndex === -1) {
+                            correspondingOldLineIndex = Math.min(newLineIndex, oldLines.length - 1);
+                        }
+                        
+                        // 确保索引在有效范围内
+                        correspondingOldLineIndex = Math.max(0, Math.min(correspondingOldLineIndex, oldLines.length - 1));
+                        
+                        // 获取旧文档对应位置的内容
+                        const oldLineContent = correspondingOldLineIndex < oldLines.length
+                            ? oldLines[correspondingOldLineIndex]
+                            : '';
+                        
+                        // 将新增行替换为旧文档对应位置的内容
+                        newLines[newLineIndex] = oldLineContent;
+                        const updatedContent = newLines.join('\n');
+                        await updateBlock("markdown", updatedContent, newDocId);
+                        showMessage("已撤回到原文档对应位置的内容");
+                        
+                        // 刷新差异视图 - 更新新文档（右侧文档）
+                        const updatedDocInfo = await this.getDocumentInfo(newDocId, 'markdown');
+                        currentDoc2 = updatedDocInfo;
                         updateDiffContent();
                     }
                 }
