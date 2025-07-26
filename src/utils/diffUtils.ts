@@ -8,6 +8,7 @@ export interface DiffLine {
     oldLineNumber?: number;
     newLineNumber?: number;
     content: string;
+    isIdLine?: boolean; // 标记是否为ID行
 }
 
 export interface DiffResult {
@@ -70,6 +71,13 @@ function preprocessText(text: string): string {
 }
 
 /**
+ * 检测是否为ID行（以{: ...}开头的行）
+ */
+function isIdLine(content: string): boolean {
+    return /^\s*\{:\s+.*}/.test(content.trim());
+}
+
+/**
  * 计算行级差异
  */
 function computeLineDiff(lines1: string[], lines2: string[]): DiffLine[] {
@@ -86,7 +94,8 @@ function computeLineDiff(lines1: string[], lines2: string[]): DiffLine[] {
                 type: 'context',
                 oldLineNumber: oldLineNum,
                 newLineNumber: newLineNum,
-                content: lines1[i]
+                content: lines1[i],
+                isIdLine: isIdLine(lines1[i])
             });
             i++;
             j++;
@@ -98,7 +107,8 @@ function computeLineDiff(lines1: string[], lines2: string[]): DiffLine[] {
             result.push({
                 type: 'removed',
                 oldLineNumber: oldLineNum,
-                content: lines1[i]
+                content: lines1[i],
+                isIdLine: isIdLine(lines1[i])
             });
             i++;
             oldLineNum++;
@@ -107,7 +117,8 @@ function computeLineDiff(lines1: string[], lines2: string[]): DiffLine[] {
             result.push({
                 type: 'added',
                 newLineNumber: newLineNum,
-                content: lines2[j]
+                content: lines2[j],
+                isIdLine: isIdLine(lines2[j])
             });
             j++;
             newLineNum++;
@@ -263,11 +274,11 @@ export function generateDiffHtml(doc1: any, doc2: any): string {
         
         switch (line.type) {
             case 'added':
-                lineClass = 'diff-line-added';
+                lineClass = line.isIdLine ? 'diff-line-added diff-line-id' : 'diff-line-added';
                 prefix = '<span class="diff-prefix">+</span>';
                 break;
             case 'removed':
-                lineClass = 'diff-line-removed';
+                lineClass = line.isIdLine ? 'diff-line-removed diff-line-id' : 'diff-line-removed';
                 prefix = '<span class="diff-prefix">-</span>';
                 break;
             case 'context':
@@ -560,6 +571,21 @@ export function generateSwappableDiffHtml(doc1: any, doc2: any, swapCallback?: s
             .diff-line-removed .diff-line-number {
                 background: #fdb8c0;
             }
+            /* ID行使用淡色样式 */
+            .diff-line-id.diff-line-added {
+                background: #f0fff4;
+                color: #6a737d;
+            }
+            .diff-line-id.diff-line-added .diff-line-number {
+                background: #e6ffed;
+            }
+            .diff-line-id.diff-line-removed {
+                background: #fef8f8;
+                color: #6a737d;
+            }
+            .diff-line-id.diff-line-removed .diff-line-number {
+                background: #ffeef0;
+            }
             .diff-line-context {
                 background: #fff;
                 color: #24292e;
@@ -742,6 +768,21 @@ export function generateFullDiffHtml(doc1: any, doc2: any): string {
             }
             .diff-line-removed .diff-line-number {
                 background: #fdb8c0;
+            }
+            /* ID行使用淡色样式 */
+            .diff-line-id.diff-line-added {
+                background: #f0fff4;
+                color: #6a737d;
+            }
+            .diff-line-id.diff-line-added .diff-line-number {
+                background: #e6ffed;
+            }
+            .diff-line-id.diff-line-removed {
+                background: #fef8f8;
+                color: #6a737d;
+            }
+            .diff-line-id.diff-line-removed .diff-line-number {
+                background: #ffeef0;
             }
             .diff-line-context {
                 background: #fff;
