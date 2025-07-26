@@ -414,7 +414,7 @@ export function generateSideBySideDiffHtml(doc1: any, doc2: any, options: DiffVi
         
         diffHtml += `
             <div class="${lineClass}" data-line-number="${lineNumber}">
-                ${showLineNumbers ? `<div class="side-line-number">${lineNumber}</div>` : ''}
+                ${showLineNumbers ? `<div class="side-line-number" contenteditable="false">${lineNumber}</div>` : ''}
                 <div class="side-line-content">${content}</div>
             </div>
         `;
@@ -451,7 +451,7 @@ export function generateSideBySideDiffHtml(doc1: any, doc2: any, options: DiffVi
         
         diffHtml += `
             <div class="${lineClass}" data-line-number="${lineNumber}">
-                ${showLineNumbers ? `<div class="side-line-number">${lineNumber}</div>` : ''}
+                ${showLineNumbers ? `<div class="side-line-number" contenteditable="false">${lineNumber}</div>` : ''}
                 <div class="side-line-content" ${isEditable}>${content}</div>
             </div>
         `;
@@ -1786,6 +1786,14 @@ export function generateModeSwitchableDiffHtml(
                 display: flex;
                 align-items: center;
                 justify-content: flex-end;
+                cursor: default;
+                pointer-events: none;
+            }
+            
+            .side-line-number[contenteditable="false"] {
+                outline: none !important;
+                cursor: default !important;
+                pointer-events: none !important;
             }
             
             .side-line-content {
