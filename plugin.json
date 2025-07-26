@@ -3,7 +3,7 @@
   "author": "Achuan-2",
   "url": "https://github.com/Achuan-2/siyuan-plugin-doc-diff",
   "version": "0.0.1",
-  "minAppVersion": "3.0.12",
+  "minAppVersion": "3.2.0",
   "backends": [
     "windows",
     "linux",
@@ -21,12 +21,12 @@
     "desktop-window"
   ],
   "displayName": {
-    "en_US": "Plugin sample with vite and svelte",
-    "zh_CN": "Achuan-2的插件样例"
+    "en_US": "Document Diff Plugin for SiYuan",
+    "zh_CN": "文档差异对比插件"
   },
   "description": {
-    "en_US": "SiYuan plugin sample with vite and svelte",
-    "zh_CN": "使用 vite 和 svelte 开发的思源插件样例"
+    "en_US": "A SiYuan plugin for comparing document differences, making it easy to view and analyze changes between documents.",
+    "zh_CN": "用于文档差异对比的思源插件，帮助用户轻松查看和分析文档变更。"
   },
   "readme": {
     "en_US": "README.md",
@@ -38,8 +38,9 @@
     ]
   },
   "keywords": [
-    "plugin",
-    "sample",
-    "插件样例"
+    "document diff",
+    "diff",
+    "文档对比",
+    "差异分析",
   ]
 }
