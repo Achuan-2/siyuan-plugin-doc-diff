@@ -2,7 +2,7 @@
   "name": "siyuan-plugin-doc-diff",
   "author": "Achuan-2",
   "url": "https://github.com/Achuan-2/siyuan-plugin-doc-diff",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "minAppVersion": "3.2.0",
   "backends": [
     "windows",
@@ -34,7 +34,7 @@
   },
   "funding": {
     "custom": [
-      ""
+      "https://fastly.jsdelivr.net/gh/Achuan-2/PicBed/assets/20241128221208-2024-11-28.png"
     ]
   },
   "keywords": [
